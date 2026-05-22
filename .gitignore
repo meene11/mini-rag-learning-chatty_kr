@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+.pytest_cache/
+
+# Env / secrets
+.env
+
+# Local data
+chroma_data/
+
+# IDE
+.vscode/
+.idea/
