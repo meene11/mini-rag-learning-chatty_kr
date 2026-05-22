@@ -25,7 +25,7 @@ AI 엔지니어 입사 첫주동안의 학습 프로젝트로:
 - Python 3.11, [uv](https://docs.astral.sh/uv/) (패키지 매니저)
 - 임베딩: [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3) (sentence-transformers, 로컬)
 - 벡터DB: [Chroma](https://www.trychroma.com/) (로컬 영구 저장)
-- 생성: [Anthropic Claude Sonnet 4.6](https://www.anthropic.com/) (`claude-sonnet-4-6`)
+- 생성: [Google Gemini Flash](https://aistudio.google.com/) (`gemini-2.5-flash`) — 무료 quota
 - 테스트: pytest
 
 자세한 아키텍처 / 데이터 흐름 / 평가 방법은 `specs/`의 설계 문서 참고.

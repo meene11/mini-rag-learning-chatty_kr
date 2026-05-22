@@ -32,7 +32,7 @@ AI 엔지니어 **입사 첫주동안의 학습 프로젝트**.
 | 패키지 매니저 | `uv` | 글로벌 CLAUDE.md 권장. 빠르고 단순. |
 | 임베딩 모델 | `BAAI/bge-m3` (sentence-transformers로 로컬) | 다국어 강함, 한국어 품질 ★. |
 | 벡터DB | `Chroma` (로컬 영구) | 사용 쉬움, 자동 디스크 저장, 메타데이터 지원. |
-| 생성 모델 | `claude-sonnet-4-6` | 일반 작업 가성비. 글로벌 CLAUDE.md 모델 정책. |
+| 생성 모델 | `gemini-2.5-flash` (Google AI Studio, 무료 quota) | 한국어 강함, 분당 15회·일 1500회 무료. 학습용 충분. |
 | 테스트 | `pytest` | TDD 맛보기. |
 | HTTP/문서 수집 | Claude Code의 WebFetch (수집은 사람이 직접) | 외부 라이브러리 추가 부담 줄이기. |
 
@@ -47,7 +47,7 @@ docs/*.txt → 청킹(전략 A: 글자수) → bge-m3 임베딩 → Chroma 컬�
 docs/*.txt → 청킹(전략 B: 문단)   → bge-m3 임베딩 → Chroma 컬렉션 "rag_para"
 
 [질문 처리]
-질문 → bge-m3 임베딩 → 각 컬렉션에서 top-3 청크 검색 → Claude Sonnet에 컨텍스트 → 답변
+질문 → bge-m3 임베딩 → 각 컬렉션에서 top-3 청크 검색 → Gemini Flash에 컨텍스트 → 답변
 같은 질문을 두 컬렉션에 던져 답변 2개 나란히 출력
 ```
 
@@ -56,7 +56,7 @@ docs/*.txt → 청킹(전략 B: 문단)   → bge-m3 임베딩 → Chroma 컬렉
 ```
 C:\Users\COM-MKUYO\sandbox\mini-rag\
 ├── .venv\                  # uv가 생성 (gitignore)
-├── .env                    # ANTHROPIC_API_KEY (gitignore)
+├── .env                    # GOOGLE_API_KEY (gitignore)
 ├── .gitignore
 ├── pyproject.toml          # uv 의존성 관리
 ├── README.md               # 사용법 + 회고 (마지막에 작성)
@@ -73,7 +73,7 @@ C:\Users\COM-MKUYO\sandbox\mini-rag\
 │   ├── __init__.py
 │   ├── ingest.py           # 문서 로드 + 두 청킹 전략 함수
 │   ├── retrieve.py         # bge-m3 임베딩 + Chroma 컬렉션 관리
-│   ├── generate.py         # Claude Sonnet 호출
+│   ├── generate.py         # Gemini Flash 호출
 │   └── main.py             # CLI 진입점, 두 전략 비교 실행
 ├── tests\
 │   └── test_ingest.py      # 청킹 함수 pytest (TDD 맛보기)
@@ -86,7 +86,7 @@ C:\Users\COM-MKUYO\sandbox\mini-rag\
 
 - `ingest.py`: 텍스트 파일 로드, 청킹 전략 2개 (`chunk_by_chars`, `chunk_by_paragraphs`). 외부 의존성 없음. **테스트 적용 대상**.
 - `retrieve.py`: sentence-transformers로 bge-m3 로드, Chroma 클라이언트 관리, 두 컬렉션(`rag_char`, `rag_para`)에 청크 저장 및 검색.
-- `generate.py`: Anthropic SDK로 Claude Sonnet 호출. 검색된 청크들을 시스템 프롬프트에 컨텍스트로 삽입.
+- `generate.py`: google-genai SDK로 Gemini Flash 호출. 검색된 청크들을 시스템 프롬프트에 컨텍스트로 삽입.
 - `main.py`: 인덱싱 모드(`python -m src.main index`), 질문 모드(`python -m src.main ask "..."`), 평가 모드(`python -m src.main eval`).
 
 ## 5. 청킹 전략 (비교 대상)
@@ -134,13 +134,13 @@ C:\Users\COM-MKUYO\sandbox\mini-rag\
 ## 8. 에러 처리 (의도적으로 최소)
 
 학습용이므로 방어 코딩 남발 금지:
-- `.env` 미로드 / `ANTHROPIC_API_KEY` 부재 → 시작 시점에 명확한 메시지로 raise.
+- `.env` 미로드 / `GOOGLE_API_KEY` 부재 → 시작 시점에 명확한 메시지로 raise.
 - 청킹 입력이 빈 문자열 → 빈 리스트 반환.
 - 그 외 예외는 그대로 raise. try/except로 묻지 않음.
 
 ## 9. 보안
 
-- `.env`에 `ANTHROPIC_API_KEY` 저장. 코드에 하드코딩 금지.
+- `.env`에 `GOOGLE_API_KEY` 저장. 코드에 하드코딩 금지.
 - `.gitignore` 1차 작성 시점에 다음 포함:
   - `.env`
   - `.venv/`
