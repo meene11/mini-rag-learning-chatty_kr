@@ -14,7 +14,7 @@
 
 ## 학습 목표
 
-비전공자 AI 엔지니어 입사 직후 3.5시간 학습 프로젝트로:
+AI 엔지니어 입사 첫주동안의 학습 프로젝트로:
 
 1. **RAG (Retrieval-Augmented Generation)** 한 사이클을 직접 만들어보며 체득
 2. **TDD (Test-Driven Development)** 사이클 맛보기 (`ingest.py` 청킹 함수)
