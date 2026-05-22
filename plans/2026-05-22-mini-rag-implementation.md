@@ -862,7 +862,7 @@ Create `C:\Users\COM-MKUYO\sandbox\mini-rag\README.md`:
 
 chatty.kr 서비스 문서에 대한 한국어 RAG 미니 시스템. 두 청킹 전략(글자수 vs 문단)의 정확도 비교 학습 프로젝트.
 
-작성: 2026-05-22 / 작성자: AI 엔지니어 입사 3일차 학습 프로젝트.
+작성: 2026-05-22 / 작성자: AI 엔지니어 입사 첫주 학습 프로젝트.
 
 ## 사용법
 
@@ -892,7 +892,7 @@ uv run python -m src.main eval
 | `src/generate.py` | Claude Sonnet 4.6 답변 생성 |
 | `src/main.py` | CLI (index / ask / eval) |
 
-## 회고 (3.5시간 작업 후 직접 작성)
+## 회고 (작업 완료 후 직접 작성)
 
 ### 잘 된 점
 - (예시) TDD 사이클을 청킹 함수에서 실제로 돌려봄. Red→Green 흐름 체감.
@@ -947,4 +947,4 @@ git commit -m "docs: add README with usage and retrospective"
 
 - **옵션 1. Subagent-Driven (skill 권장)** — Task마다 별도 subagent를 띄우고 task 사이에 리뷰. 빠른 반복, 한 단계 끝날 때마다 사용자가 확인 가능.
 - **옵션 2. Inline Execution** — 이 세션에서 그대로 `executing-plans` skill로 batch 실행. 체크포인트마다 확인.
-- **옵션 3. Manual** — 사용자가 직접 plan을 읽으며 명령어를 PowerShell에 복붙. 가장 학습 효과 큼 (비전공자 학습자 추천).
+- **옵션 3. Manual** — 사용자가 직접 plan을 읽으며 명령어를 PowerShell에 복붙. 가장 학습 효과 큼 (학습자 추천).
