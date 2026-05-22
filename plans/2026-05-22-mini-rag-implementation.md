@@ -4,9 +4,9 @@
 
 **Goal:** chatty.kr 메인 + 기능 페이지 4~5개를 대상으로 한국어 RAG 미니 시스템을 구축하고, 두 청킹 전략(글자수 500/50, 문단 기반)을 정확도 측면에서 비교한다.
 
-**Architecture:** 텍스트 인제스트 → 청킹(전략 A/B) → bge-m3 임베딩 → Chroma 컬렉션 2개 저장 → 질문 시 두 컬렉션 각각에서 top-3 검색 → 컨텍스트와 함께 Claude Sonnet 4.6에 전달 → 답변 두 개를 나란히 출력하고 평가 점수를 CSV로 기록.
+**Architecture:** 텍스트 인제스트 → 청킹(전략 A/B) → bge-m3 임베딩 → Chroma 컬렉션 2개 저장 → 질문 시 두 컬렉션 각각에서 top-3 검색 → 컨텍스트와 함께 Gemini Flash 4.6에 전달 → 답변 두 개를 나란히 출력하고 평가 점수를 CSV로 기록.
 
-**Tech Stack:** Python 3.11, uv (패키지 매니저), sentence-transformers (BAAI/bge-m3), chromadb, anthropic SDK (`claude-sonnet-4-6`), pytest, python-dotenv.
+**Tech Stack:** Python 3.11, uv (패키지 매니저), sentence-transformers (BAAI/bge-m3), chromadb, google-genai SDK (`gemini-2.5-flash`, 무료 quota), pytest, python-dotenv.
 
 ---
 
@@ -26,7 +26,7 @@
 ```
 C:\Users\COM-MKUYO\sandbox\mini-rag\
 ├── .venv\                              # uv가 생성, gitignore
-├── .env                                # ANTHROPIC_API_KEY=..., gitignore
+├── .env                                # GOOGLE_API_KEY=..., gitignore
 ├── .env.example                        # 키 없는 템플릿, 공유 가능
 ├── .gitignore
 ├── pyproject.toml                      # uv 의존성
@@ -59,7 +59,7 @@ C:\Users\COM-MKUYO\sandbox\mini-rag\
 각 파일 책임:
 - `src/ingest.py`: 텍스트 로드 + 두 청킹 함수 (`chunk_by_chars`, `chunk_by_paragraphs`). 순수 함수. 외부 의존성 0.
 - `src/retrieve.py`: bge-m3 모델 로딩, Chroma 클라이언트 관리, 두 컬렉션 인덱싱/검색 함수.
-- `src/generate.py`: 컨텍스트 + 질문 → Claude Sonnet → 답변 문자열.
+- `src/generate.py`: 컨텍스트 + 질문 → Gemini Flash → 답변 문자열.
 - `src/main.py`: CLI 엔트리 (`index`, `ask`, `eval` 모드).
 - `tests/test_ingest.py`: 청킹 함수 단위 테스트 (TDD 사이클 실제로 돌릴 곳).
 - `eval/questions.txt`: 평가 질문 5~7개.
@@ -103,7 +103,7 @@ Expected: `pyproject.toml` 생성됨.
 
 Run:
 ```powershell
-uv add anthropic chromadb sentence-transformers python-dotenv
+uv add google-genai chromadb sentence-transformers python-dotenv
 uv add --dev pytest
 ```
 Expected: `pyproject.toml`에 dependencies 섹션 추가, `.venv` 자동 생성, `uv.lock` 생성됨.
@@ -145,14 +145,15 @@ chroma_data/
 
 Create `C:\Users\COM-MKUYO\sandbox\mini-rag\.env.example`:
 ```
-ANTHROPIC_API_KEY=sk-ant-xxx-여기에-실제-키
+# Google AI Studio에서 무료 발급: https://aistudio.google.com/apikey
+GOOGLE_API_KEY=AIza-여기에-실제-키
 ```
 
 - [ ] **Step 7: `.env` 작성 (실제 키)**
 
 Create `C:\Users\COM-MKUYO\sandbox\mini-rag\.env`:
 ```
-ANTHROPIC_API_KEY=여기에_실제_키_복붙
+GOOGLE_API_KEY=여기에_실제_키_복붙
 ```
 
 ⚠️ 실제 키는 사용자가 직접 입력. `.gitignore`에 `.env`가 들어 있어 안전.
@@ -161,7 +162,7 @@ ANTHROPIC_API_KEY=여기에_실제_키_복붙
 
 Run:
 ```powershell
-uv run python -c "import anthropic, chromadb, sentence_transformers; from dotenv import load_dotenv; print('OK')"
+uv run python -c "from google import genai; import chromadb, sentence_transformers; from dotenv import load_dotenv; print('OK')"
 ```
 Expected: `OK` 출력. 에러 나면 의존성 재설치.
 
@@ -540,7 +541,7 @@ git commit -m "feat(retrieve): add Retriever with bge-m3 and Chroma"
 
 ---
 
-## Task 5: `generate.py` — Claude Sonnet 호출
+## Task 5: `generate.py` — Gemini Flash 호출 (Google AI Studio 무료 API)
 
 **Files:**
 - Create: `C:\Users\COM-MKUYO\sandbox\mini-rag\src\generate.py`
@@ -549,17 +550,18 @@ git commit -m "feat(retrieve): add Retriever with bge-m3 and Chroma"
 
 Create `C:\Users\COM-MKUYO\sandbox\mini-rag\src\generate.py`:
 ```python
-"""Claude Sonnet 4.6을 사용해 컨텍스트 기반 답변을 생성한다."""
+"""Google Gemini Flash을 사용해 컨텍스트 기반 답변을 생성한다."""
 
 import os
 
-from anthropic import Anthropic
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
-MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 1024
+MODEL = "gemini-2.5-flash"
+MAX_OUTPUT_TOKENS = 1024
 
 
 def _build_system_prompt(context_chunks: list[str]) -> str:
@@ -575,20 +577,23 @@ def _build_system_prompt(context_chunks: list[str]) -> str:
 
 
 def generate_answer(question: str, context_chunks: list[str]) -> str:
-    """질문 + 검색된 청크 → Claude Sonnet 답변."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    """질문 + 검색된 청크 → Gemini Flash 답변."""
+    api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         raise RuntimeError(
-            ".env에 ANTHROPIC_API_KEY가 없습니다. .env.example을 참고해 작성하세요."
+            ".env에 GOOGLE_API_KEY가 없습니다. .env.example을 참고해 작성하세요. "
+            "키 발급: https://aistudio.google.com/apikey"
         )
-    client = Anthropic(api_key=api_key, max_retries=3)
-    response = client.messages.create(
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
         model=MODEL,
-        max_tokens=MAX_TOKENS,
-        system=_build_system_prompt(context_chunks),
-        messages=[{"role": "user", "content": question}],
+        contents=question,
+        config=types.GenerateContentConfig(
+            system_instruction=_build_system_prompt(context_chunks),
+            max_output_tokens=MAX_OUTPUT_TOKENS,
+        ),
     )
-    return response.content[0].text
+    return response.text
 ```
 
 - [ ] **Step 2: 시스템 프롬프트 단위 확인 (API 호출 없음)**
@@ -603,7 +608,7 @@ Expected: "당신은 chatty.kr…" 으로 시작하는 프롬프트가 출력됨
 
 ```powershell
 git add src/generate.py
-git commit -m "feat(generate): add Claude Sonnet answer generation"
+git commit -m "feat(generate): add Gemini Flash answer generation via google-genai"
 ```
 
 ---
@@ -870,7 +875,7 @@ chatty.kr 서비스 문서에 대한 한국어 RAG 미니 시스템. 두 청킹 
 # 1. 의존성 설치 (최초 1회)
 uv sync
 
-# 2. .env 작성 (.env.example 참고해 ANTHROPIC_API_KEY 입력)
+# 2. .env 작성 (.env.example 참고해 GOOGLE_API_KEY 입력)
 
 # 3. 인덱싱 (첫 실행 시 bge-m3 모델 ~2GB 다운로드)
 uv run python -m src.main index
@@ -889,7 +894,7 @@ uv run python -m src.main eval
 |---|---|
 | `src/ingest.py` | 텍스트 로드 + 두 청킹 함수 (TDD로 작성) |
 | `src/retrieve.py` | bge-m3 + Chroma 인덱싱/검색 |
-| `src/generate.py` | Claude Sonnet 4.6 답변 생성 |
+| `src/generate.py` | Google Gemini Flash 답변 생성 |
 | `src/main.py` | CLI (index / ask / eval) |
 
 ## 회고 (작업 완료 후 직접 작성)
