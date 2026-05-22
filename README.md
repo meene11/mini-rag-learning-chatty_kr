@@ -2,6 +2,32 @@
 
 > chatty.kr 문서를 대상으로 한 mini-RAG 실험 — AI 엔지니어 입사 학습 프로젝트 (TDD / RAG / 청킹 비교)
 
+## 한 문장으로 이게 뭔가요
+
+> **chatty.kr 회사 소개 텍스트에 자연어로 질문하면, 그 회사 자료를 근거로 답을 만들어주는 작은 챗봇.** 텍스트를 자르는 두 가지 방식(글자수 vs 문단)으로 동시에 만들어, 어느 쪽이 더 좋은 답을 내는지 정량 비교한 학습 프로젝트.
+
+## 이게 어떻게 돌아가는가 (비전공자용 흐름)
+
+### 1단계 — 인덱싱 (한 번만, `python -m src.main index`)
+1. `docs/` 폴더의 .txt 5개를 통째로 읽음
+2. 텍스트를 **두 가지 방식으로 잘라 청크 만들기**
+   - **글자수 전략**: 500자씩, 50자 겹치게 → 16청크
+   - **문단 전략**: 빈 줄 기준으로 → 57청크
+3. 각 청크를 **"의미 숫자"(임베딩, 1024차원 벡터)** 로 변환 (bge-m3 모델 사용)
+4. Chroma DB에 **두 개의 컬렉션(`rag_char`, `rag_para`)** 으로 따로 저장
+
+### 2단계 — 질문 (`python -m src.main ask "..."`)
+1. 사용자 질문도 같은 방식으로 **의미 숫자로 변환**
+2. 두 컬렉션 각각에서 **의미가 가까운 청크 top-3 검색** (벡터 거리 계산)
+3. 검색된 3청크 + 질문을 **Gemini Flash에 "이 자료만 보고 답해줘"** 라고 전달
+4. Gemini가 자연스러운 한국어 답변 생성
+5. 두 전략의 답변을 **나란히 출력** → 비교 가능
+
+### 3단계 — 평가 (`python -m src.main eval`)
+1. `eval/questions.txt`의 5질문을 두 전략에 던짐
+2. 각 질문에 대해 **두 답변의 단어 일치도(Jaccard)** 자동 계산
+3. 10행 CSV로 `eval/results.csv` 저장
+
 ## 현재 상태 (2026-05-22)
 
 ✅ MVP 완료 — 두 청킹 전략 인덱싱·검색·답변 비교 가능. 5질문 평가 결과 1세트 저장.
@@ -21,52 +47,86 @@ AI 엔지니어 입사 첫주동안의 학습 프로젝트:
 2. **TDD (Test-Driven Development)** 사이클 맛보기 (`ingest.py` 청킹 함수에 pytest 8개)
 3. **두 청킹 전략(글자수 vs 문단)** 정확도 비교 — RAG 평가 영역 체험
 
-## 기술 스택
+## 기술 스택 — 무엇을 왜 골랐나
 
-- Python 3.11, [uv](https://docs.astral.sh/uv/) (패키지 매니저)
-- 임베딩: [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3) (sentence-transformers, 로컬)
-- 벡터DB: [Chroma](https://www.trychroma.com/) (로컬 영구 저장)
-- 생성: [Google Gemini Flash](https://aistudio.google.com/) (`gemini-2.5-flash`) — 무료 quota
-- 테스트: pytest (TDD)
+| 도구 | 역할 | 왜 골랐나 |
+|---|---|---|
+| **Python 3.11** | 언어 | AI 생태계 표준. 사용자 학습용 |
+| **uv** | 패키지 매니저 | pip보다 10~100배 빠름. 가상환경 + 의존성 잠금 일체 |
+| **sentence-transformers** | 임베딩 라이브러리 | 모델을 로컬에서 무료로 실행 (API 호출 불필요) |
+| **BAAI/bge-m3** | 임베딩 모델 | 다국어 강함. **한국어 RAG에서 사실상 표준** |
+| **chromadb** | 벡터 데이터베이스 | 3줄로 시작, 자동 영구 저장, 메타데이터 지원 |
+| **google-genai** | Gemini SDK | Google 공식, async 지원, 깔끔한 API |
+| **gemini-2.5-flash** | LLM (답변 생성) | **무료 quota** 분 15회·일 1500회, 한국어 강함 |
+| **gemini-2.5-flash-lite** | LLM fallback | 본 모델 503 시 자동 대체 |
+| **pytest** | 테스트 러너 | Python 표준 테스트 도구, TDD에 필수 |
+| **python-dotenv** | .env 로더 | API 키를 코드에 하드코딩 안 함 |
+
+> 💡 임베딩(`bge-m3`)은 **사용자 PC에서 실행** → 키 불필요·무료. 생성(`gemini-2.5-flash`)만 외부 API → 무료 quota 사용. 즉 **API 키 1개**(`GOOGLE_API_KEY`)만 있으면 끝.
 
 ## 사용법
 
+> VSCode 터미널에서 가상환경 `(mini-rag)`가 활성화돼 있으면 `uv run` 생략 가능.
+
 ```powershell
-# 1. 의존성 설치 (최초 1회)
+# 1. 의존성 설치 (최초 1회 — pyproject.toml 보고 자동 설치)
 uv sync
 
-# 2. .env 작성 — .env.example 참고해 GOOGLE_API_KEY 입력
-# 키 발급: https://aistudio.google.com/apikey
+# 2. .env 작성 — .env.example 복사해서 GOOGLE_API_KEY 채우기
+#   키 발급: https://aistudio.google.com/apikey  (Google 계정 로그인 → "Create API Key")
 
-# 3. 인덱싱 (첫 실행 시 bge-m3 모델 다운로드)
+# 3. 인덱싱: docs/의 5개 .txt 읽어 두 컬렉션에 저장
+#   첫 실행 시 bge-m3 모델 ~2GB 다운로드 (이후 캐시)
 uv run python -m src.main index
 
-# 4. 단일 질문
+# 4. 단일 질문 — 두 전략의 답변 나란히 비교
 uv run python -m src.main ask "AI 채팅의 핵심 기술이 뭐야?"
 
-# 5. 평가 (5질문 x 2전략 자동 비교)
+# 5. 평가 — 5질문 × 2전략 = 10 Gemini 호출, eval/results.csv 저장
 uv run python -m src.main eval
 
-# 6. 테스트
+# 6. 테스트 — 청킹 함수 8개
 uv run pytest -v
+
+# 7. 특정 테스트만
+uv run pytest -k chunk_by_chars -v
 ```
 
-## 구조
+## 구조 — 각 파일 한 줄 요약
 
 ```
 src/
-  ingest.py     # 텍스트 로드 + 두 청킹 전략 (chunk_by_chars, chunk_by_paragraphs) + load_documents
-  retrieve.py   # bge-m3 임베딩 + Chroma 인덱싱/검색 (Retriever 클래스)
-  generate.py   # Gemini Flash 답변 생성 + 503 재시도 + flash-lite fallback
-  main.py       # CLI (index / ask / eval)
+  ingest.py     ── 텍스트를 두 가지 방식으로 자르는 함수들 + 파일 로더
+  retrieve.py   ── 청크를 의미 숫자로 변환해 Chroma에 저장, 질문으로 유사 청크 찾기
+  generate.py   ── 청크+질문을 Gemini에 보내 답 받기 (503 재시도 + fallback 포함)
+  main.py       ── 위 3개를 묶어 CLI로 노출 (index / ask / eval)
 tests/
-  test_ingest.py  # pytest 8개 (청킹 함수 TDD)
+  test_ingest.py ── 청킹 함수가 의도대로 자르는지 검증 (pytest 8개, TDD로 작성)
 docs/
-  chatty_*.txt  # chatty.kr 5페이지 본문 (~7000자)
+  chatty_*.txt   ── chatty.kr 5페이지 본문 (RAG 대상 데이터, ~7000자)
 eval/
-  questions.txt  # 평가 질문 5개
-  results.csv    # 평가 결과 (10행 = 5질문 × 2전략)
+  questions.txt  ── 평가용 질문 5개 (한 줄에 한 질문)
+  results.csv    ── 평가 결과 (각 행: 질문/전략/검색청크/답변/일치도)
+specs/
+  *.md           ── 프로젝트 설계 문서
+plans/
+  *.md           ── 단계별 구현 계획 (Task 0~8)
+.env.example     ── API 키 입력 템플릿 (.env는 gitignore)
+pyproject.toml   ── 의존성·Python 버전 잠금 (uv가 관리)
+uv.lock          ── 모든 패키지 버전 정확히 잠금
 ```
+
+### 핵심 함수 시그니처 (검색해서 코드 찾을 때 유용)
+
+| 함수 / 클래스 | 위치 | 입력 → 출력 |
+|---|---|---|
+| `chunk_by_chars(text, size, overlap)` | `src/ingest.py` | 긴 문자열 → 500자씩 잘린 청크 리스트 |
+| `chunk_by_paragraphs(text, min_chars, max_chars)` | `src/ingest.py` | 긴 문자열 → 문단 단위 청크 리스트 |
+| `load_documents(docs_dir)` | `src/ingest.py` | 폴더 → `{파일명: 내용}` dict |
+| `Retriever()` | `src/retrieve.py` | bge-m3 모델 로드 + Chroma 클라이언트 |
+| `Retriever.index(name, chunks)` | `src/retrieve.py` | 청크 리스트 → 임베딩 후 Chroma 저장 |
+| `Retriever.search(name, query, top_k)` | `src/retrieve.py` | 질문 → 유사 청크 top_k |
+| `generate_answer(question, chunks)` | `src/generate.py` | 질문+청크 → Gemini 답변 문자열 |
 
 ## 첫 평가 결과 — 두 청킹 전략 비교
 
